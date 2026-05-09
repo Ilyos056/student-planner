@@ -69,6 +69,8 @@ const App = {
   data: null,
   currentPage: 'today',
   weekOffset: 0,
+  calMonth: 0,        // 0 = current month, +1 next, -1 prev
+  calSelectedDate: null,
   pomodoroInterval: null,
   pomodoroSeconds: 0,
   pomodoroMode: 'work',
@@ -405,6 +407,7 @@ const App = {
     if (page === 'today') this.renderToday();
     if (page === 'tomorrow') this.renderTomorrow();
     if (page === 'goals') this.renderGoals();
+    if (page === 'calendar') this.renderCalendar();
   },
 
   // ------------------------------------------
@@ -1019,6 +1022,142 @@ const App = {
     const progress = this.pomodoroSeconds / total;
     const offset = circumference * (1 - progress);
     document.getElementById('timerRing').style.strokeDashoffset = offset;
+  },
+
+  // ------------------------------------------
+  // CALENDAR PAGE
+  // ------------------------------------------
+  renderCalendar() {
+    const months = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthIdx = now.getMonth() + this.calMonth;
+    const targetDate = new Date(year, monthIdx, 1);
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+
+    document.getElementById('calTitle').textContent =
+      `${months[targetMonth]} ${targetYear}`;
+
+    // Build day grid (Mon-Sun)
+    const firstDay = new Date(targetYear, targetMonth, 1);
+    const lastDay = new Date(targetYear, targetMonth + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+    const todayStr = this.dateStr(0);
+
+    // Previous month padding days
+    const prevMonthLastDay = new Date(targetYear, targetMonth, 0).getDate();
+    const cells = [];
+
+    // Previous month visible days
+    for (let i = startDow - 1; i >= 0; i--) {
+      const d = prevMonthLastDay - i;
+      const dt = new Date(targetYear, targetMonth - 1, d);
+      cells.push({ date: dt.toISOString().slice(0,10), num: d, otherMonth: true });
+    }
+
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(targetYear, targetMonth, d);
+      cells.push({ date: dt.toISOString().slice(0,10), num: d, otherMonth: false });
+    }
+
+    // Pad to complete last week (multiples of 7)
+    while (cells.length % 7 !== 0) {
+      const last = new Date(cells[cells.length-1].date + 'T00:00:00');
+      last.setDate(last.getDate() + 1);
+      cells.push({ date: last.toISOString().slice(0,10), num: last.getDate(), otherMonth: true });
+    }
+
+    document.getElementById('calDays').innerHTML = cells.map(cell => {
+      const isToday = cell.date === todayStr;
+      const isSelected = cell.date === this.calSelectedDate;
+      const dots = this.calDayDots(cell.date);
+      return `<div class="cal-day ${cell.otherMonth?'other-month':''} ${isToday?'today':''} ${isSelected?'selected':''}"
+        onclick="App.selectCalendarDay('${cell.date}')">
+        <span class="cal-day-num">${cell.num}</span>
+        <div class="cal-dots">${dots}</div>
+      </div>`;
+    }).join('');
+
+    if (!this.calSelectedDate) this.calSelectedDate = todayStr;
+    this.renderSelectedDay();
+  },
+
+  calDayDots(dateStr) {
+    const date = new Date(dateStr + 'T00:00:00');
+    const dow = date.getDay();
+    const dots = [];
+    // Classes (using subject color)
+    const classes = this.classesForDay(dow);
+    classes.slice(0,3).forEach(c => {
+      const sub = this.getSubject(c.subjectId);
+      dots.push(`<span class="cal-dot" style="background:${sub.color}"></span>`);
+    });
+    // Tasks
+    const tasks = this.tasksForDate(dateStr);
+    if (tasks.length > 0) dots.push(`<span class="cal-dot" style="background:#10B981"></span>`);
+    // Exams
+    const exams = this.data.exams.filter(e => e.date === dateStr);
+    if (exams.length > 0) dots.push(`<span class="cal-dot" style="background:#EF4444"></span>`);
+    return dots.slice(0, 4).join('');
+  },
+
+  selectCalendarDay(dateStr) {
+    this.calSelectedDate = dateStr;
+    this.renderCalendar();
+  },
+
+  renderSelectedDay() {
+    const date = this.calSelectedDate;
+    const dt = new Date(date + 'T00:00:00');
+    const days = ['Yakshanba','Dushanba','Seshanba','Chorshanba','Payshanba','Juma','Shanba'];
+    const months = ['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+    document.getElementById('selectedDayTitle').textContent =
+      `${days[dt.getDay()]}, ${dt.getDate()} ${months[dt.getMonth()]}`;
+
+    const classes = this.classesForDay(dt.getDay());
+    const tasks = this.tasksForDate(date);
+    const exams = this.data.exams.filter(e => e.date === date);
+
+    let html = '';
+    if (classes.length) {
+      html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin:8px 0 4px;letter-spacing:1px">📚 Darslar</div>`;
+      html += classes.map(c => {
+        const sub = this.getSubject(c.subjectId);
+        return `<div class="timeline-item">
+          <div class="timeline-color" style="background:${sub.color}"></div>
+          <div class="timeline-info">
+            <div class="timeline-subject">${sub.icon} ${sub.name}</div>
+            <div class="timeline-meta">${c.room ? '🏫 ' + c.room : ''} ${c.teacher ? '👤 ' + c.teacher : ''}</div>
+          </div>
+          <div class="timeline-time"><div>${c.startTime}</div><div style="font-size:11px;margin-top:2px">${c.endTime}</div></div>
+        </div>`;
+      }).join('');
+    }
+    if (tasks.length) {
+      html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin:12px 0 4px;letter-spacing:1px">✅ Vazifalar</div>`;
+      html += tasks.map(t => this.renderTaskItem(t)).join('');
+    }
+    if (exams.length) {
+      html += `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin:12px 0 4px;letter-spacing:1px">📝 Imtihonlar</div>`;
+      html += exams.map(e => {
+        const sub = this.getSubject(e.subjectId);
+        return `<div class="timeline-item">
+          <div class="timeline-color" style="background:#EF4444"></div>
+          <div class="timeline-info">
+            <div class="timeline-subject">${sub.icon} ${sub.name}</div>
+            <div class="timeline-meta">${e.examType} ${e.room ? '• ' + e.room : ''}</div>
+          </div>
+          <div class="timeline-time">${e.examTime || ''}</div>
+        </div>`;
+      }).join('');
+    }
+    if (!html) {
+      html = `<div class="empty-state"><span>📭</span><p>Bu kunda hech narsa yo'q</p></div>`;
+    }
+    document.getElementById('selectedDayContent').innerHTML = html;
   },
 
   // ------------------------------------------
