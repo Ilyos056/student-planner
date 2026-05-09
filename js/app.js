@@ -440,7 +440,38 @@ const App = {
   },
 
   tasksForDate(dateStr) {
-    return this.data.tasks.filter(t => t.dueDate === dateStr);
+    const direct = this.data.tasks.filter(t => t.dueDate === dateStr);
+    const recurring = this.recurringTasksFor(dateStr);
+    return [...direct, ...recurring];
+  },
+
+  recurringTasksFor(dateStr) {
+    const date = new Date(dateStr + 'T00:00:00');
+    const dow = date.getDay();
+    const dom = date.getDate();
+    const result = [];
+    for (const t of this.data.tasks) {
+      if (!t.recurring || t.recurring === 'none') continue;
+      // Don't duplicate if this is the original date
+      if (t.dueDate === dateStr) continue;
+      // Don't show before original due date
+      if (t.dueDate && dateStr < t.dueDate) continue;
+      const orig = t.dueDate ? new Date(t.dueDate + 'T00:00:00') : null;
+      let match = false;
+      switch (t.recurring) {
+        case 'daily':    match = true; break;
+        case 'weekly':   match = orig && orig.getDay() === dow; break;
+        case 'monthly':  match = orig && orig.getDate() === dom; break;
+        case 'weekdays': match = dow >= 1 && dow <= 5; break;
+      }
+      if (match) {
+        // Generate virtual instance with composite ID
+        const virtualId = `${t.id}__${dateStr}`;
+        const completed = (t.completedDates || []).includes(dateStr);
+        result.push({ ...t, id: virtualId, dueDate: dateStr, completed, isRecurringInstance: true, originalId: t.id });
+      }
+    }
+    return result;
   },
 
   isOngoing(startTime, endTime) {
@@ -646,6 +677,10 @@ const App = {
       else if (due === 1) { dueClass='today'; dueText='Ertaga'; }
       else dueText = `${this.formatDate(t.dueDate)} (${due} kun)`;
     }
+    const recIcons = { daily:'🔁 Har kuni', weekly:'🔁 Har hafta', monthly:'🔁 Har oy', weekdays:'🔁 Ish kunlari' };
+    const recBadge = t.recurring && t.recurring !== 'none'
+      ? `<span style="font-size:10px;background:var(--primary-light);color:var(--primary);padding:1px 6px;border-radius:10px;font-weight:600">${recIcons[t.recurring] || '🔁'}</span>`
+      : '';
     return `<div class="task-item ${t.completed?'done':''}" id="task-${t.id}">
       <div class="priority-dot priority-${t.priority||'medium'}"></div>
       <div class="task-check ${t.completed?'checked':''}" onclick="App.toggleTask('${t.id}')">
@@ -656,6 +691,7 @@ const App = {
         <div class="task-meta">
           <span class="task-subject-tag" style="background:${sub.color}22;color:${sub.color}">${sub.icon} ${sub.name}</span>
           ${t.dueDate ? `<span class="task-due ${dueClass}">${dueText}</span>` : ''}
+          ${recBadge}
         </div>
         ${t.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${this.escHtml(t.description)}</div>` : ''}
       </div>
@@ -1176,15 +1212,19 @@ const App = {
   },
 
   editTask(id) {
-    const t = this.data.tasks.find(x => x.id === id);
+    // If recurring instance, edit the original
+    const realId = id.includes('__') ? id.split('__')[0] : id;
+    const t = this.data.tasks.find(x => x.id === realId);
     if (!t) return;
-    this.editingTaskId = id;
+    this.editingTaskId = realId;
     this.populateSelect('taskSubject');
     document.getElementById('taskTitle').value = t.title;
     document.getElementById('taskSubject').value = t.subjectId;
     document.getElementById('taskDue').value = t.dueDate || '';
     document.getElementById('taskPriority').value = t.priority || 'medium';
     document.getElementById('taskDesc').value = t.description || '';
+    const recSel = document.getElementById('taskRecurring');
+    if (recSel) recSel.value = t.recurring || 'none';
     document.querySelector('#modal-task .modal-header h3').textContent = 'Vazifani tahrirlash';
     document.getElementById('modal-task').classList.add('open');
   },
@@ -1263,17 +1303,18 @@ const App = {
     const dueDate = document.getElementById('taskDue').value;
     const priority = document.getElementById('taskPriority').value;
     const description = document.getElementById('taskDesc').value.trim();
+    const recurring = document.getElementById('taskRecurring')?.value || 'none';
 
     if (!title) { this.toast('⚠️ Vazifa nomini kiriting'); return; }
     if (!dueDate) { this.toast('⚠️ Muddatni kiriting'); return; }
 
     if (this.editingTaskId) {
       const t = this.data.tasks.find(x => x.id === this.editingTaskId);
-      if (t) Object.assign(t, { title, subjectId, dueDate, priority, description });
+      if (t) Object.assign(t, { title, subjectId, dueDate, priority, description, recurring });
       this.toast('✅ Vazifa yangilandi!');
     } else {
-      this.data.tasks.push({ id: this.uid(), title, subjectId, dueDate, priority, description, completed: false, createdAt: Date.now() });
-      this.toast('✅ Vazifa qo\'shildi!');
+      this.data.tasks.push({ id: this.uid(), title, subjectId, dueDate, priority, description, recurring, completed: false, completedDates: [], createdAt: Date.now() });
+      this.toast(recurring !== 'none' ? '✅ Takrorlanuvchi vazifa qo\'shildi!' : '✅ Vazifa qo\'shildi!');
     }
     this.editingTaskId = null;
     this.save();
@@ -1336,7 +1377,13 @@ const App = {
   },
 
   deleteTask(id) {
-    this.data.tasks = this.data.tasks.filter(t => t.id !== id);
+    if (id.includes('__')) {
+      if (!confirm('Bu takrorlanuvchi vazifaning barcha takrorlanishlarini o\'chirmoqchimisiz?')) return;
+      const origId = id.split('__')[0];
+      this.data.tasks = this.data.tasks.filter(t => t.id !== origId);
+    } else {
+      this.data.tasks = this.data.tasks.filter(t => t.id !== id);
+    }
     this.save();
     this.renderToday();
     this.renderTomorrow();
@@ -1373,6 +1420,24 @@ const App = {
   },
 
   toggleTask(id) {
+    // Recurring instance? id format: "originalId__YYYY-MM-DD"
+    if (id.includes('__')) {
+      const [origId, date] = id.split('__');
+      const task = this.data.tasks.find(t => t.id === origId);
+      if (!task) return;
+      if (!task.completedDates) task.completedDates = [];
+      const idx = task.completedDates.indexOf(date);
+      if (idx === -1) task.completedDates.push(date);
+      else task.completedDates.splice(idx, 1);
+      this.save();
+      this.renderToday(); this.renderTomorrow();
+      if (this.currentPage === 'subjects') this.renderSubjectsPage();
+      if (idx === -1) {
+        this.toast('✅ Bajarildi!');
+        this.checkAllTasksDone();
+      }
+      return;
+    }
     const task = this.data.tasks.find(t => t.id === id);
     if (!task) return;
     task.completed = !task.completed;
@@ -1382,13 +1447,17 @@ const App = {
     if (this.currentPage === 'subjects') this.renderSubjectsPage();
     if (task.completed) {
       this.toast('✅ Vazifa bajarildi!');
-      // Confetti if all today's tasks are done
-      const todayTasks = this.data.tasks.filter(t => t.dueDate === this.dateStr(0));
-      const allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
-      if (allDone) {
-        setTimeout(() => this.fireConfetti(), 300);
-        setTimeout(() => this.toast('🎉 Bugungi barcha vazifalar bajarildi!'), 500);
-      }
+      this.checkAllTasksDone();
+    }
+  },
+
+  checkAllTasksDone() {
+    const today = this.dateStr(0);
+    const todayTasks = this.tasksForDate(today);
+    const allDone = todayTasks.length > 0 && todayTasks.every(t => t.completed);
+    if (allDone) {
+      setTimeout(() => this.fireConfetti(), 300);
+      setTimeout(() => this.toast('🎉 Bugungi barcha vazifalar bajarildi!'), 500);
     }
   },
 
