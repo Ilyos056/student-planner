@@ -701,9 +701,11 @@ const App = {
           <span class="task-subject-tag" style="background:${sub.color}22;color:${sub.color}">${sub.icon} ${sub.name}</span>
           ${t.dueDate ? `<span class="task-due ${dueClass}">${dueText}</span>` : ''}
           ${recBadge}
+          ${t.image ? '<span style="font-size:11px">📷</span>' : ''}
         </div>
         ${t.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${this.escHtml(t.description)}</div>` : ''}
       </div>
+      ${t.image ? `<img src="${t.image}" class="task-image-thumb" alt="task" onclick="event.stopPropagation();App.openImageViewer('${t.image}')" />` : ''}
       <div class="task-actions">
         <button class="task-del" title="Tahrirlash" onclick="App.editTask('${t.id}')">✏️</button>
         <button class="task-del" title="O'chirish" onclick="App.deleteTask('${t.id}')">🗑️</button>
@@ -1650,11 +1652,15 @@ const App = {
     const tomorrow = this.dateStr(1);
     if (type === 'task') {
       this.editingTaskId = null;
+      this.currentTaskImage = null;
       document.getElementById('taskDue').value = tomorrow;
       document.getElementById('taskTitle').value = '';
       document.getElementById('taskDesc').value = '';
       document.getElementById('taskPriority').value = 'medium';
+      const recSel = document.getElementById('taskRecurring');
+      if (recSel) recSel.value = 'none';
       this.populateSelect('taskSubject');
+      this.updateImagePreview(null);
       document.querySelector('#modal-task .modal-header h3').textContent = 'Vazifa qo\'shish';
     }
     if (type === 'class') {
@@ -1697,6 +1703,8 @@ const App = {
     document.getElementById('taskDesc').value = t.description || '';
     const recSel = document.getElementById('taskRecurring');
     if (recSel) recSel.value = t.recurring || 'none';
+    this.updateImagePreview(t.image || null);
+    if (t.image) this.currentTaskImage = t.image;
     document.querySelector('#modal-task .modal-header h3').textContent = 'Vazifani tahrirlash';
     document.getElementById('modal-task').classList.add('open');
   },
@@ -1780,14 +1788,16 @@ const App = {
     if (!title) { this.toast('⚠️ Vazifa nomini kiriting'); return; }
     if (!dueDate) { this.toast('⚠️ Muddatni kiriting'); return; }
 
+    const image = this.currentTaskImage || null;
     if (this.editingTaskId) {
       const t = this.data.tasks.find(x => x.id === this.editingTaskId);
-      if (t) Object.assign(t, { title, subjectId, dueDate, priority, description, recurring });
+      if (t) Object.assign(t, { title, subjectId, dueDate, priority, description, recurring, image });
       this.toast('✅ Vazifa yangilandi!');
     } else {
-      this.data.tasks.push({ id: this.uid(), title, subjectId, dueDate, priority, description, recurring, completed: false, completedDates: [], createdAt: Date.now() });
+      this.data.tasks.push({ id: this.uid(), title, subjectId, dueDate, priority, description, recurring, image, completed: false, completedDates: [], createdAt: Date.now() });
       this.toast(recurring !== 'none' ? '✅ Takrorlanuvchi vazifa qo\'shildi!' : '✅ Vazifa qo\'shildi!');
     }
+    this.currentTaskImage = null;
     this.editingTaskId = null;
     this.save();
     this.closeModal('task');
@@ -1827,6 +1837,66 @@ const App = {
     this.renderSubjectsPage();
     this.toast('✅ Fan qo\'shildi!');
     document.getElementById('subjectName').value = '';
+  },
+
+  // ------------------------------------------
+  // IMAGE UPLOAD
+  // ------------------------------------------
+  handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      this.toast('⚠️ Rasm hajmi 2 MB dan kichik bo\'lishi kerak');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // Compress image using canvas
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 800;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = height * maxDim / width; width = maxDim; }
+          else { width = width * maxDim / height; height = maxDim; }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        this.currentTaskImage = dataUrl;
+        this.updateImagePreview(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  updateImagePreview(dataUrl) {
+    const preview = document.getElementById('taskImagePreview');
+    if (!dataUrl) {
+      preview.className = 'image-preview-empty';
+      preview.innerHTML = '<span>📷</span><p>Rasm tanlash yoki kameradan olish</p>';
+      preview.onclick = () => document.getElementById('taskImageInput').click();
+      this.currentTaskImage = null;
+      document.getElementById('taskImageInput').value = '';
+    } else {
+      preview.className = 'image-preview-filled';
+      preview.innerHTML = `<img src="${dataUrl}" alt="Task image" />
+        <button class="remove-img-btn" onclick="event.stopPropagation();App.updateImagePreview(null)">✕</button>`;
+      preview.onclick = () => this.openImageViewer(dataUrl);
+    }
+  },
+
+  openImageViewer(src) {
+    document.getElementById('imageViewerImg').src = src;
+    document.getElementById('imageViewer').classList.add('open');
+  },
+
+  closeImageViewer() {
+    document.getElementById('imageViewer').classList.remove('open');
   },
 
   selectEmoji(el) {

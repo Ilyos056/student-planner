@@ -512,6 +512,16 @@
         </select>
       </div>
       <div class="form-group">
+        <label>Rasm biriktirish</label>
+        <div class="image-upload-area">
+          <input type="file" id="taskImageInput" accept="image/*" style="display:none" onchange="App.handleImageUpload(event)" />
+          <div id="taskImagePreview" class="image-preview-empty" onclick="document.getElementById('taskImageInput').click()">
+            <span>📷</span>
+            <p>Rasm tanlash yoki kameradan olish</p>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
         <label>Izoh</label>
         <textarea id="taskDesc" class="form-textarea" placeholder="Qo'shimcha ma'lumot..." rows="3"></textarea>
       </div>
@@ -850,6 +860,12 @@
 
     </div>
   </div>
+</div>
+
+<!-- Image Viewer -->
+<div id="imageViewer" class="image-viewer" onclick="App.closeImageViewer()">
+  <button class="image-viewer-close" onclick="event.stopPropagation();App.closeImageViewer()">✕</button>
+  <img id="imageViewerImg" src="" alt="" />
 </div>
 
 <!-- Confetti Canvas -->
