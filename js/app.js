@@ -108,6 +108,7 @@ const App = {
       this.deferredInstallPrompt = e;
       document.getElementById('installBanner').style.display = 'flex';
     });
+    setTimeout(() => this.checkUrlForShare(), 500);
   },
 
   loadData() {
@@ -1649,6 +1650,11 @@ const App = {
   // ------------------------------------------
   openModal(type) {
     if (type === 'settings') { this.openSettings(); return; }
+    if (type === 'share') {
+      document.getElementById('modal-share').classList.add('open');
+      setTimeout(() => this.generateQR(), 100);
+      return;
+    }
     const tomorrow = this.dateStr(1);
     if (type === 'task') {
       this.editingTaskId = null;
@@ -2006,6 +2012,155 @@ const App = {
   // ------------------------------------------
   // SHARE / EXPORT / IMPORT
   // ------------------------------------------
+  // ------------------------------------------
+  // SHARE: QR / LINK
+  // ------------------------------------------
+  setShareTab(tab) {
+    document.querySelectorAll('.share-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.share-tab-content').forEach(c => c.style.display = 'none');
+    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+    document.getElementById('shareTab-' + tab).style.display = '';
+    if (tab === 'qr') this.generateQR();
+    if (tab === 'link') this.generateShareLink();
+  },
+
+  buildSharePayload() {
+    const includeTasks = document.getElementById('qrIncludeTasks')?.checked;
+    const includeExams = document.getElementById('qrIncludeExams')?.checked;
+    const payload = {
+      v: 1,
+      subjects: this.data.subjects.map(s => ({ id: s.id, n: s.name, c: s.color, i: s.icon })),
+      schedule: this.data.schedule.map(c => ({
+        s: c.subjectId, st: c.startTime, e: c.endTime, r: c.room,
+        t: c.teacher, ct: c.classType, d: c.days,
+      })),
+    };
+    if (includeTasks) {
+      payload.tasks = this.data.tasks.filter(t => !t.image).map(t => ({
+        ti: t.title, s: t.subjectId, dd: t.dueDate, p: t.priority,
+        de: t.description, rec: t.recurring,
+      }));
+    }
+    if (includeExams) {
+      payload.exams = this.data.exams.map(e => ({
+        s: e.subjectId, d: e.date, et: e.examTime, t: e.examType, r: e.room, n: e.notes,
+      }));
+    }
+    return payload;
+  },
+
+  payloadToData(p) {
+    const d = JSON.parse(JSON.stringify(defaultData));
+    d.subjects = (p.subjects || []).map(s => ({ id: s.id, name: s.n, color: s.c, icon: s.i }));
+    d.schedule = (p.schedule || []).map(c => ({
+      id: this.uid(), subjectId: c.s, startTime: c.st, endTime: c.e,
+      room: c.r, teacher: c.t, classType: c.ct, days: c.d,
+    }));
+    d.tasks = (p.tasks || []).map(t => ({
+      id: this.uid(), title: t.ti, subjectId: t.s, dueDate: t.dd, priority: t.p,
+      description: t.de, recurring: t.rec, completed: false, completedDates: [], createdAt: Date.now(),
+    }));
+    d.exams = (p.exams || []).map(e => ({
+      id: this.uid(), subjectId: e.s, date: e.d, examTime: e.et, examType: e.t, room: e.r, notes: e.n,
+    }));
+    return d;
+  },
+
+  encodeShareData() {
+    const payload = this.buildSharePayload();
+    const json = JSON.stringify(payload);
+    return btoa(unescape(encodeURIComponent(json)));
+  },
+
+  decodeShareData(encoded) {
+    try {
+      return JSON.parse(decodeURIComponent(escape(atob(encoded))));
+    } catch {
+      return null;
+    }
+  },
+
+  generateQR() {
+    const canvas = document.getElementById('qrCanvas');
+    if (!canvas || !window.QRCode) return;
+    const url = this.makeShareUrl();
+    QRCode.toCanvas(canvas, url, { width: 240, margin: 1, color: { dark: '#1A1A2E', light: '#FFFFFF' } }, (err) => {
+      if (err) {
+        // Fallback: show text instead
+        canvas.replaceWith(Object.assign(document.createElement('div'), {
+          textContent: 'QR juda katta — ozroq ma\'lumot tanlang',
+          style: 'padding:30px;color:#EF4444;font-size:13px;text-align:center'
+        }));
+      }
+    });
+  },
+
+  makeShareUrl() {
+    const encoded = this.encodeShareData();
+    const base = location.origin + location.pathname.replace(/index\.html?$/, '');
+    return `${base}#share=${encoded}`;
+  },
+
+  generateShareLink() {
+    document.getElementById('shareLinkInput').value = this.makeShareUrl();
+  },
+
+  copyShareLink() {
+    const input = document.getElementById('shareLinkInput');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(() => {
+      this.toast('🔗 Havola nusxalandi!');
+    }).catch(() => {
+      document.execCommand('copy');
+      this.toast('🔗 Havola nusxalandi!');
+    });
+  },
+
+  checkUrlForShare() {
+    const hash = location.hash;
+    if (!hash.startsWith('#share=')) return;
+    const encoded = hash.slice(7);
+    const payload = this.decodeShareData(encoded);
+    if (!payload) {
+      this.toast('❌ Havola yaroqsiz');
+      history.replaceState(null, '', location.pathname);
+      return;
+    }
+    this._pendingImport = payload;
+    const counts = [];
+    counts.push(`${payload.subjects?.length || 0} ta fan`);
+    counts.push(`${payload.schedule?.length || 0} ta dars`);
+    if (payload.tasks?.length) counts.push(`${payload.tasks.length} ta vazifa`);
+    if (payload.exams?.length) counts.push(`${payload.exams.length} ta imtihon`);
+    document.getElementById('importPreview').innerHTML =
+      `Quyidagilar import qilinadi:<br><strong>${counts.join(', ')}</strong>`;
+    document.getElementById('modal-import-url').classList.add('open');
+    history.replaceState(null, '', location.pathname);
+  },
+
+  confirmImportFromUrl(append = false) {
+    const payload = this._pendingImport;
+    if (!payload) return;
+    const newData = this.payloadToData(payload);
+    if (append) {
+      // Merge: add new subjects (avoiding duplicate IDs), schedule, tasks, exams
+      const existingSubIds = new Set(this.data.subjects.map(s => s.id));
+      newData.subjects.forEach(s => { if (!existingSubIds.has(s.id)) this.data.subjects.push(s); });
+      this.data.schedule.push(...newData.schedule);
+      this.data.tasks.push(...newData.tasks);
+      this.data.exams.push(...newData.exams);
+    } else {
+      this.data = { ...this.data, subjects: newData.subjects, schedule: newData.schedule, tasks: newData.tasks, exams: newData.exams };
+    }
+    this.save();
+    this.populateSubjectSelects();
+    this.renderToday(); this.renderTomorrow();
+    this.closeModal('import-url');
+    this._pendingImport = null;
+    this.toast('✅ Jadval qabul qilindi!');
+    this.fireConfetti();
+  },
+
   exportData() {
     const json = JSON.stringify(this.data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });

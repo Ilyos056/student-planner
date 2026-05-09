@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -632,18 +633,73 @@
 <div class="modal-overlay" id="modal-share">
   <div class="modal">
     <div class="modal-header">
-      <h3>Ma'lumotlarni ulashish</h3>
+      <h3>📤 Ulashish</h3>
       <button class="close-btn" onclick="App.closeModal('share')">✕</button>
     </div>
     <div class="modal-body">
-      <p class="text-secondary" style="margin-bottom:16px">Jadvalingizni sinfdoshlar bilan ulashing yoki zaxira nusxa oling.</p>
-      <button class="btn btn-primary btn-full" onclick="App.exportData()" style="margin-bottom:12px">📤 Eksport qilish (JSON)</button>
-      <label class="btn btn-outline btn-full" style="cursor:pointer;text-align:center">
-        📥 Import qilish
-        <input type="file" accept=".json" style="display:none" onchange="App.importData(event)" />
-      </label>
-      <hr style="margin:16px 0;border-color:var(--border)">
-      <button class="btn btn-outline btn-full" onclick="App.copySchedule()">📋 Jadvalni nusxalash</button>
+
+      <!-- Tabs -->
+      <div class="share-tabs">
+        <button class="share-tab active" data-tab="qr" onclick="App.setShareTab('qr')">📱 QR kod</button>
+        <button class="share-tab" data-tab="link" onclick="App.setShareTab('link')">🔗 Havola</button>
+        <button class="share-tab" data-tab="file" onclick="App.setShareTab('file')">💾 Fayl</button>
+      </div>
+
+      <!-- QR Tab -->
+      <div class="share-tab-content active" id="shareTab-qr">
+        <p class="text-secondary" style="margin-bottom:12px">Sinfdoshingiz QR kodni telefoni bilan o'qisin va jadvalingiz unga import bo'ladi.</p>
+        <div class="qr-container" id="qrContainer">
+          <canvas id="qrCanvas"></canvas>
+        </div>
+        <div class="qr-options">
+          <label class="qr-option-row">
+            <input type="checkbox" id="qrIncludeTasks" /> Vazifalarni ham ulashish
+          </label>
+          <label class="qr-option-row">
+            <input type="checkbox" id="qrIncludeExams" /> Imtihonlarni ham ulashish
+          </label>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="App.generateQR()" style="margin-top:8px">🔄 QR kodni yangilash</button>
+      </div>
+
+      <!-- Link Tab -->
+      <div class="share-tab-content" id="shareTab-link" style="display:none">
+        <p class="text-secondary" style="margin-bottom:12px">Havolani nusxalab istalgan joyga yuboring.</p>
+        <div class="share-link-box">
+          <input type="text" id="shareLinkInput" readonly />
+          <button class="btn btn-primary" onclick="App.copyShareLink()" style="padding:8px 14px">📋</button>
+        </div>
+        <button class="btn btn-outline btn-full" onclick="App.generateShareLink()" style="margin-top:8px">🔄 Havolani yangilash</button>
+        <hr style="margin:16px 0;border-color:var(--border)" />
+        <button class="btn btn-outline btn-full" onclick="App.copySchedule()">📋 Matn ko'rinishida nusxalash</button>
+      </div>
+
+      <!-- File Tab -->
+      <div class="share-tab-content" id="shareTab-file" style="display:none">
+        <p class="text-secondary" style="margin-bottom:12px">Barcha ma'lumotlarni fayl ko'rinishida saqlang yoki yuklang.</p>
+        <button class="btn btn-primary btn-full" onclick="App.exportData()" style="margin-bottom:12px">📤 JSON fayl yuklab olish</button>
+        <label class="btn btn-outline btn-full" style="cursor:pointer;text-align:center">
+          📥 JSON fayl import qilish
+          <input type="file" accept=".json" style="display:none" onchange="App.importData(event)" />
+        </label>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Import from URL prompt -->
+<div class="modal-overlay" id="modal-import-url">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📥 Jadvalni qabul qilish</h3>
+      <button class="close-btn" onclick="App.closeModal('import-url')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="importPreview" style="margin-bottom:16px"></p>
+      <p class="text-secondary" style="margin-bottom:12px;font-size:12px">⚠️ Mavjud ma'lumotlaringiz o'rniga import bo'ladi!</p>
+      <button class="btn btn-primary btn-full" onclick="App.confirmImportFromUrl()" style="margin-bottom:8px">✅ Import qilish</button>
+      <button class="btn btn-outline btn-full" onclick="App.confirmImportFromUrl(true)">➕ Mavjudga qo'shish</button>
     </div>
   </div>
 </div>
