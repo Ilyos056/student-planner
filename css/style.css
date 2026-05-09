@@ -940,6 +940,73 @@ body {
 .time-indicator-dot { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; flex-shrink: 0; }
 .time-indicator-label { font-size: 11px; font-weight: 700; color: var(--danger); white-space: nowrap; }
 
+/* ===== GRADES ===== */
+.grades-header-card {
+  background: linear-gradient(135deg, #10B981, #059669);
+  border: none;
+  color: white;
+}
+.grades-summary-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.grade-summary-stat { text-align: center; }
+.grade-num { font-size: 28px; font-weight: 800; color: white; line-height: 1; }
+.grade-label { font-size: 11px; color: rgba(255,255,255,0.85); margin-top: 4px; }
+
+.grades-list { display: flex; flex-direction: column; gap: 8px; }
+
+.grade-subject-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.grade-subject-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.grade-subject-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.grade-subject-gpa {
+  font-size: 18px;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.grade-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.grade-list-row:first-child { border-top: none; }
+.grade-row-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.grade-row-type { font-weight: 600; }
+.grade-row-meta { font-size: 11px; color: var(--text-secondary); }
+.grade-row-score {
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.grade-row-actions { display: flex; gap: 4px; }
+.grade-del { background: none; border: none; font-size: 14px; cursor: pointer; opacity: 0.4; padding: 4px; }
+.grade-del:hover { opacity: 1; }
+
+.grade-color-A { background: #10B98122; color: #059669; }
+.grade-color-B { background: #3B82F622; color: #2563EB; }
+.grade-color-C { background: #F59E0B22; color: #D97706; }
+.grade-color-D { background: #EF444422; color: #DC2626; }
+.grade-color-F { background: #6B728022; color: #4B5563; }
+
 /* ===== CALENDAR ===== */
 .calendar-nav {
   display: flex;

@@ -19,6 +19,7 @@ const defaultData = {
   exams: [],
   pomodoroSessions: [],
   goals: [],
+  grades: [],
   settings: {
     darkMode: false,
     pomodoroWork: 25,
@@ -125,6 +126,7 @@ const App = {
       if (!this.data.exams) this.data.exams = [];
       if (!this.data.pomodoroSessions) this.data.pomodoroSessions = [];
       if (!this.data.goals) this.data.goals = [];
+      if (!this.data.grades) this.data.grades = [];
       if (!this.data.settings) this.data.settings = { ...defaultData.settings };
     } catch {
       this.data = JSON.parse(JSON.stringify(defaultData));
@@ -408,6 +410,7 @@ const App = {
     if (page === 'tomorrow') this.renderTomorrow();
     if (page === 'goals') this.renderGoals();
     if (page === 'calendar') this.renderCalendar();
+    if (page === 'grades') this.renderGrades();
   },
 
   // ------------------------------------------
@@ -1025,6 +1028,142 @@ const App = {
   },
 
   // ------------------------------------------
+  // GRADES / GPA
+  // ------------------------------------------
+  renderGrades() {
+    const grades = this.data.grades || [];
+
+    // Overall stats
+    document.getElementById('totalGrades').textContent = grades.length;
+
+    if (grades.length) {
+      const totalPct = grades.reduce((sum, g) => sum + (g.score / g.max * 100), 0) / grades.length;
+      document.getElementById('gradeAvgPct').textContent = totalPct.toFixed(1) + '%';
+      document.getElementById('overallGPA').textContent = this.pctToGPA(totalPct).toFixed(2);
+    } else {
+      document.getElementById('gradeAvgPct').textContent = '—';
+      document.getElementById('overallGPA').textContent = '—';
+    }
+
+    // By subject
+    const bySubject = document.getElementById('gradesBySubject');
+    const grouped = {};
+    grades.forEach(g => {
+      if (!grouped[g.subjectId]) grouped[g.subjectId] = [];
+      grouped[g.subjectId].push(g);
+    });
+
+    if (!Object.keys(grouped).length) {
+      bySubject.innerHTML = `<div class="empty-state"><span>📈</span><p>Hali baholar yo'q</p>
+        <button class="btn btn-outline" onclick="App.openModal('grade')">Birinchi baho qo'shish</button></div>`;
+    } else {
+      bySubject.innerHTML = Object.entries(grouped).map(([sid, list]) => {
+        const sub = this.getSubject(sid);
+        // Weighted average
+        const totalWeight = list.reduce((s, g) => s + (g.weight || 10), 0);
+        const weighted = list.reduce((s, g) => s + (g.score / g.max * 100) * (g.weight || 10), 0) / totalWeight;
+        const letter = this.pctToLetter(weighted);
+        return `<div class="grade-subject-card">
+          <div class="grade-subject-header">
+            <div class="grade-subject-name" style="color:${sub.color}">${sub.icon} ${sub.name}</div>
+            <span class="grade-subject-gpa grade-color-${letter}">${letter} • ${weighted.toFixed(1)}%</span>
+          </div>
+          ${list.slice(-5).reverse().map(g => this.renderGradeRow(g)).join('')}
+        </div>`;
+      }).join('');
+    }
+
+    // Recent grades
+    const recent = document.getElementById('recentGrades');
+    const sorted = [...grades].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 8);
+    if (!sorted.length) {
+      recent.innerHTML = '';
+    } else {
+      recent.innerHTML = sorted.map(g => {
+        const sub = this.getSubject(g.subjectId);
+        return `<div class="grade-subject-card" style="padding:12px 14px">
+          ${this.renderGradeRow(g, true, sub)}
+        </div>`;
+      }).join('');
+    }
+  },
+
+  renderGradeRow(g, showSubject = false, sub = null) {
+    const pct = g.score / g.max * 100;
+    const letter = this.pctToLetter(pct);
+    const types = {
+      kunlik:'📝 Kunlik', test:'📋 Test', kontrolnoy:'📄 Nazorat',
+      oraliq:'📊 Oraliq', yakuniy:'🎓 Yakuniy',
+      laboratoriya:'🔬 Laboratoriya', kurs:'📚 Kurs ishi'
+    };
+    return `<div class="grade-list-row">
+      <div class="grade-row-info">
+        <span class="grade-row-type">${types[g.type] || g.type}${showSubject && sub ? ' • ' + sub.icon + ' ' + sub.name : ''}</span>
+        <span class="grade-row-meta">${g.date ? this.formatDate(g.date) : ''} ${g.note ? '• ' + this.escHtml(g.note) : ''}</span>
+      </div>
+      <div class="grade-row-actions">
+        <span class="grade-row-score grade-color-${letter}">${g.score}/${g.max}</span>
+        <button class="grade-del" onclick="App.deleteGrade('${g.id}')">🗑️</button>
+      </div>
+    </div>`;
+  },
+
+  pctToLetter(pct) {
+    if (pct >= 90) return 'A';
+    if (pct >= 80) return 'B';
+    if (pct >= 70) return 'C';
+    if (pct >= 60) return 'D';
+    return 'F';
+  },
+
+  pctToGPA(pct) {
+    // 4.0 scale
+    if (pct >= 90) return 4.0;
+    if (pct >= 85) return 3.7;
+    if (pct >= 80) return 3.3;
+    if (pct >= 75) return 3.0;
+    if (pct >= 70) return 2.7;
+    if (pct >= 65) return 2.3;
+    if (pct >= 60) return 2.0;
+    if (pct >= 55) return 1.7;
+    if (pct >= 50) return 1.3;
+    return 0;
+  },
+
+  saveGrade() {
+    const subjectId = document.getElementById('gradeSubject').value;
+    const type = document.getElementById('gradeType').value;
+    const score = parseFloat(document.getElementById('gradeScore').value);
+    const max = parseFloat(document.getElementById('gradeMax').value);
+    const date = document.getElementById('gradeDate').value;
+    const weight = parseInt(document.getElementById('gradeWeight').value) || 10;
+    const note = document.getElementById('gradeNote').value.trim();
+
+    if (!subjectId) { this.toast('⚠️ Fan tanlang'); return; }
+    if (isNaN(score) || isNaN(max) || max < 1) { this.toast('⚠️ Ballarni to\'g\'ri kiriting'); return; }
+    if (score < 0 || score > max) { this.toast('⚠️ Ball 0 dan ' + max + ' gacha bo\'lishi kerak'); return; }
+
+    if (!this.data.grades) this.data.grades = [];
+    this.data.grades.push({ id: this.uid(), subjectId, type, score, max, date: date || this.dateStr(0), weight, note, createdAt: Date.now() });
+    this.save();
+    this.closeModal('grade');
+    this.renderGrades();
+    document.getElementById('gradeScore').value = '';
+    document.getElementById('gradeNote').value = '';
+    const pct = score / max * 100;
+    if (pct >= 90) this.fireConfetti();
+    this.toast(`✅ Baho qo'shildi: ${this.pctToLetter(pct)} (${pct.toFixed(0)}%)`);
+  },
+
+  deleteGrade(id) {
+    if (!confirm('Bu bahoni o\'chirmoqchimisiz?')) return;
+    this.data.grades = this.data.grades.filter(g => g.id !== id);
+    this.save();
+    this.renderGrades();
+    this.toast('🗑️ Baho o\'chirildi');
+  },
+
+  // ------------------------------------------
   // CALENDAR PAGE
   // ------------------------------------------
   renderCalendar() {
@@ -1530,6 +1669,17 @@ const App = {
       document.getElementById('examNotes').value = '';
       document.getElementById('examRoom').value = '';
     }
+    if (type === 'grade') {
+      this.populateSelect('gradeSubject');
+      document.getElementById('gradeDate').value = this.dateStr(0);
+      document.getElementById('gradeScore').value = '';
+      document.getElementById('gradeMax').value = '100';
+      document.getElementById('gradeWeight').value = '10';
+      document.getElementById('gradeNote').value = '';
+    }
+    if (type === 'goal') {
+      this.onGoalTypeChange();
+    }
     document.getElementById('modal-' + type).classList.add('open');
   },
 
@@ -1582,7 +1732,7 @@ const App = {
   },
 
   populateSubjectSelects() {
-    ['classSubject','taskSubject','examSubject','pomodoroSubject'].forEach(id => {
+    ['classSubject','taskSubject','examSubject','pomodoroSubject','gradeSubject'].forEach(id => {
       this.populateSelect(id);
     });
   },

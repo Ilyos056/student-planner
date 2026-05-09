@@ -274,6 +274,39 @@
       </div>
     </div>
 
+    <!-- ===== PAGE: GRADES (BAHOLAR) ===== -->
+    <div class="page" id="page-grades">
+      <div class="page-inner">
+        <div class="card grades-header-card">
+          <div class="grades-summary-row">
+            <div class="grade-summary-stat">
+              <div class="grade-num" id="overallGPA">—</div>
+              <div class="grade-label">O'rtacha (GPA)</div>
+            </div>
+            <div class="grade-summary-stat">
+              <div class="grade-num" id="totalGrades">0</div>
+              <div class="grade-label">Baholar</div>
+            </div>
+            <div class="grade-summary-stat">
+              <div class="grade-num" id="gradeAvgPct">—</div>
+              <div class="grade-label">Foiz</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <h3>Fanlar bo'yicha</h3>
+          <button class="add-btn" onclick="App.openModal('grade')">+ Baho</button>
+        </div>
+        <div id="gradesBySubject" class="grades-list"></div>
+
+        <div class="section-header" style="margin-top:16px">
+          <h3>Oxirgi baholar</h3>
+        </div>
+        <div id="recentGrades" class="grades-list"></div>
+      </div>
+    </div>
+
     <!-- ===== PAGE: GOALS (MAQSADLAR) ===== -->
     <div class="page" id="page-goals">
       <div class="page-inner">
@@ -366,6 +399,9 @@
     </button>
     <button class="nav-item" data-page="exams" onclick="App.navigate('exams')">
       <span class="nav-icon">📝</span><span class="nav-label">Imtihon</span>
+    </button>
+    <button class="nav-item" data-page="grades" onclick="App.navigate('grades')">
+      <span class="nav-icon">📈</span><span class="nav-label">Baholar</span>
     </button>
     <button class="nav-item" data-page="goals" onclick="App.navigate('goals')">
       <span class="nav-icon">🎯</span><span class="nav-label">Maqsadlar</span>
@@ -598,6 +634,59 @@
       </label>
       <hr style="margin:16px 0;border-color:var(--border)">
       <button class="btn btn-outline btn-full" onclick="App.copySchedule()">📋 Jadvalni nusxalash</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== GRADE MODAL ===== -->
+<div class="modal-overlay" id="modal-grade">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Baho qo'shish</h3>
+      <button class="close-btn" onclick="App.closeModal('grade')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Fan *</label>
+        <select id="gradeSubject" class="form-select"></select>
+      </div>
+      <div class="form-group">
+        <label>Topshiriq turi *</label>
+        <select id="gradeType" class="form-select">
+          <option value="kunlik">📝 Kunlik baho</option>
+          <option value="test">📋 Test</option>
+          <option value="kontrolnoy">📄 Nazorat ishi</option>
+          <option value="oraliq">📊 Oraliq imtihon</option>
+          <option value="yakuniy">🎓 Yakuniy imtihon</option>
+          <option value="laboratoriya">🔬 Laboratoriya</option>
+          <option value="kurs">📚 Kurs ishi</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Olingan ball *</label>
+          <input type="number" id="gradeScore" class="form-input" min="0" step="0.1" placeholder="85" required />
+        </div>
+        <div class="form-group">
+          <label>Maksimum ball *</label>
+          <input type="number" id="gradeMax" class="form-input" min="1" value="100" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Sana</label>
+          <input type="date" id="gradeDate" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label>Vaznlik (%)</label>
+          <input type="number" id="gradeWeight" class="form-input" min="1" max="100" value="10" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Izoh</label>
+        <input type="text" id="gradeNote" class="form-input" placeholder="Masalan: 1-bob bo'yicha..." />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="App.saveGrade()">Saqlash</button>
     </div>
   </div>
 </div>
