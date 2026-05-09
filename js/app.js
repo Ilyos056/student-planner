@@ -18,6 +18,7 @@ const defaultData = {
   tasks: [],
   exams: [],
   pomodoroSessions: [],
+  goals: [],
   settings: {
     darkMode: false,
     pomodoroWork: 25,
@@ -121,6 +122,7 @@ const App = {
       if (!this.data.tasks) this.data.tasks = [];
       if (!this.data.exams) this.data.exams = [];
       if (!this.data.pomodoroSessions) this.data.pomodoroSessions = [];
+      if (!this.data.goals) this.data.goals = [];
       if (!this.data.settings) this.data.settings = { ...defaultData.settings };
     } catch {
       this.data = JSON.parse(JSON.stringify(defaultData));
@@ -402,6 +404,7 @@ const App = {
     if (page === 'stats') this.renderStats();
     if (page === 'today') this.renderToday();
     if (page === 'tomorrow') this.renderTomorrow();
+    if (page === 'goals') this.renderGoals();
   },
 
   // ------------------------------------------
@@ -1016,6 +1019,186 @@ const App = {
     const progress = this.pomodoroSeconds / total;
     const offset = circumference * (1 - progress);
     document.getElementById('timerRing').style.strokeDashoffset = offset;
+  },
+
+  // ------------------------------------------
+  // GOALS PAGE
+  // ------------------------------------------
+  renderGoals() {
+    const list = document.getElementById('goalsList');
+    const archive = document.getElementById('goalsArchive');
+    const goals = this.data.goals || [];
+
+    const active = goals.filter(g => !this.isGoalCompleted(g));
+    const completed = goals.filter(g => this.isGoalCompleted(g));
+
+    document.getElementById('goalsSummary').textContent =
+      `${active.length} faol, ${completed.length} bajarildi`;
+
+    if (!active.length) {
+      list.innerHTML = `<div class="empty-state"><span>🎯</span><p>Faol maqsad yo'q</p>
+        <button class="btn btn-outline" onclick="App.openModal('goal')">Maqsad qo'shish</button></div>`;
+    } else {
+      list.innerHTML = active.map(g => this.renderGoalCard(g)).join('');
+    }
+
+    if (!completed.length) {
+      archive.innerHTML = `<p class="text-secondary" style="text-align:center;padding:12px">Hali bajarilgan maqsad yo'q</p>`;
+    } else {
+      archive.innerHTML = completed.slice(-5).reverse().map(g => this.renderGoalCard(g)).join('');
+    }
+  },
+
+  renderGoalCard(g) {
+    const progress = this.calcGoalProgress(g);
+    const pct = Math.min(100, Math.round(progress / g.target * 100));
+    const fillClass = pct >= 100 ? 'success' : pct >= 70 ? '' : pct < 30 ? 'warn' : '';
+    const completed = this.isGoalCompleted(g);
+    const metricLabels = { pomodoro:'🍅 Pomodoro', tasks:'✅ Vazifa', hours:'⏰ Soat', manual:'📝 Qo\'lda' };
+    const typeLabels = { weekly:'📅 Haftalik', monthly:'🗓️ Oylik', custom:'📌 Maxsus' };
+
+    let deadlineBadge = '';
+    if (g.type === 'custom' && g.deadline) {
+      const days = this.daysUntil(g.deadline);
+      let bg = '#10B98122', col = '#10B981';
+      if (days < 0) { bg='#6B728022'; col='#6B7280'; }
+      else if (days <= 3) { bg='#EF444422'; col='#EF4444'; }
+      else if (days <= 7) { bg='#F59E0B22'; col='#F59E0B'; }
+      deadlineBadge = `<span class="goal-deadline-badge" style="background:${bg};color:${col}">${days < 0 ? 'Muddati o\'tdi' : days + ' kun qoldi'}</span>`;
+    } else if (g.type === 'weekly' || g.type === 'monthly') {
+      deadlineBadge = `<span class="goal-deadline-badge">${typeLabels[g.type]}</span>`;
+    }
+
+    return `<div class="goal-card ${completed ? 'completed' : ''}">
+      <button class="goal-del" onclick="App.deleteGoal('${g.id}')">✕</button>
+      <div class="goal-header">
+        <div class="goal-icon">${completed ? '🏆' : '🎯'}</div>
+        <div class="goal-info">
+          <div class="goal-title">${this.escHtml(g.title)}</div>
+          <div class="goal-meta">
+            <span>${metricLabels[g.metric]}</span>
+            ${deadlineBadge}
+          </div>
+          ${g.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${this.escHtml(g.description)}</div>` : ''}
+        </div>
+      </div>
+      <div class="goal-progress">
+        <div class="goal-progress-bar">
+          <div class="goal-progress-fill ${fillClass}" style="width:${pct}%"></div>
+        </div>
+        <div class="goal-progress-text">
+          <span><strong>${progress}</strong> / ${g.target} ${this.metricUnit(g.metric)}</span>
+          <span><strong>${pct}%</strong></span>
+        </div>
+      </div>
+      ${g.metric === 'manual' && !completed ? `<div class="goal-actions">
+        <button class="goal-manual-btn" onclick="App.incrementGoal('${g.id}', -1)">− 1</button>
+        <button class="goal-manual-btn" onclick="App.incrementGoal('${g.id}', 1)">+ 1</button>
+      </div>` : ''}
+    </div>`;
+  },
+
+  metricUnit(metric) {
+    return { pomodoro:'sessiya', tasks:'vazifa', hours:'soat', manual:'' }[metric] || '';
+  },
+
+  calcGoalProgress(g) {
+    if (g.metric === 'manual') return g.manualProgress || 0;
+    const range = this.goalDateRange(g);
+    if (g.metric === 'pomodoro') {
+      return this.data.pomodoroSessions.filter(s =>
+        s.completed && s.date >= range.start && s.date <= range.end
+      ).length;
+    }
+    if (g.metric === 'tasks') {
+      let count = this.data.tasks.filter(t =>
+        t.completed && t.dueDate >= range.start && t.dueDate <= range.end
+      ).length;
+      // Include recurring task completions
+      this.data.tasks.forEach(t => {
+        if (t.completedDates) {
+          count += t.completedDates.filter(d => d >= range.start && d <= range.end).length;
+        }
+      });
+      return count;
+    }
+    if (g.metric === 'hours') {
+      const mins = this.data.pomodoroSessions.filter(s =>
+        s.completed && s.date >= range.start && s.date <= range.end
+      ).reduce((sum, s) => sum + (s.duration || 0), 0);
+      return Math.round(mins / 60 * 10) / 10;
+    }
+    return 0;
+  },
+
+  goalDateRange(g) {
+    const today = this.dateStr(0);
+    if (g.type === 'weekly') {
+      const d = new Date();
+      const dayOfWeek = (d.getDay() + 6) % 7; // Mon=0
+      const monday = new Date(d); monday.setDate(d.getDate() - dayOfWeek);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      return { start: monday.toISOString().slice(0,10), end: sunday.toISOString().slice(0,10) };
+    }
+    if (g.type === 'monthly') {
+      const d = new Date();
+      const first = new Date(d.getFullYear(), d.getMonth(), 1);
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return { start: first.toISOString().slice(0,10), end: last.toISOString().slice(0,10) };
+    }
+    return { start: g.createdAt ? new Date(g.createdAt).toISOString().slice(0,10) : today, end: g.deadline || today };
+  },
+
+  isGoalCompleted(g) {
+    return this.calcGoalProgress(g) >= g.target;
+  },
+
+  onGoalTypeChange() {
+    const type = document.getElementById('goalType').value;
+    document.getElementById('goalDeadlineGroup').style.display = type === 'custom' ? '' : 'none';
+    if (type === 'custom') document.getElementById('goalDeadline').value = this.dateStr(7);
+  },
+
+  saveGoal() {
+    const title = document.getElementById('goalTitle').value.trim();
+    const type = document.getElementById('goalType').value;
+    const metric = document.getElementById('goalMetric').value;
+    const target = parseInt(document.getElementById('goalTarget').value);
+    const description = document.getElementById('goalDesc').value.trim();
+    const deadline = type === 'custom' ? document.getElementById('goalDeadline').value : null;
+
+    if (!title) { this.toast('⚠️ Maqsad nomini kiriting'); return; }
+    if (!target || target < 1) { this.toast('⚠️ Maqsad qiymati kerak'); return; }
+    if (type === 'custom' && !deadline) { this.toast('⚠️ Muddatni kiriting'); return; }
+
+    if (!this.data.goals) this.data.goals = [];
+    this.data.goals.push({
+      id: this.uid(), title, type, metric, target, description, deadline,
+      manualProgress: 0, createdAt: Date.now(),
+    });
+    this.save();
+    this.closeModal('goal');
+    this.renderGoals();
+    document.getElementById('goalTitle').value = '';
+    document.getElementById('goalDesc').value = '';
+    this.toast('🎯 Maqsad qo\'shildi!');
+  },
+
+  incrementGoal(id, delta) {
+    const g = this.data.goals.find(x => x.id === id);
+    if (!g) return;
+    g.manualProgress = Math.max(0, (g.manualProgress || 0) + delta);
+    this.save();
+    this.renderGoals();
+    if (g.manualProgress >= g.target) this.fireConfetti();
+  },
+
+  deleteGoal(id) {
+    if (!confirm('Bu maqsadni o\'chirmoqchimisiz?')) return;
+    this.data.goals = this.data.goals.filter(g => g.id !== id);
+    this.save();
+    this.renderGoals();
+    this.toast('🗑️ Maqsad o\'chirildi');
   },
 
   // ------------------------------------------

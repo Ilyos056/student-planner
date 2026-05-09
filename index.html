@@ -250,6 +250,29 @@
       </div>
     </div>
 
+    <!-- ===== PAGE: GOALS (MAQSADLAR) ===== -->
+    <div class="page" id="page-goals">
+      <div class="page-inner">
+        <div class="card goals-header-card">
+          <h2>🎯 Maqsadlar</h2>
+          <p class="text-secondary" id="goalsSummary">Maqsadlar qo'ying va kuzatib boring</p>
+        </div>
+
+        <div class="section-header">
+          <h3>Faol maqsadlar</h3>
+          <button class="add-btn" onclick="App.openModal('goal')">+ Maqsad</button>
+        </div>
+        <div id="goalsList" class="goals-list">
+          <div class="empty-state"><span>🎯</span><p>Maqsad qo'shilmagan</p>
+            <button class="btn btn-outline" onclick="App.openModal('goal')">Birinchi maqsad qo'shish</button>
+          </div>
+        </div>
+
+        <div class="section-header" style="margin-top:16px"><h3>Bajarilgan maqsadlar</h3></div>
+        <div id="goalsArchive" class="goals-list"></div>
+      </div>
+    </div>
+
     <!-- ===== PAGE: STATISTIKA (STATS) ===== -->
     <div class="page" id="page-stats">
       <div class="page-inner">
@@ -316,6 +339,9 @@
     </button>
     <button class="nav-item" data-page="exams" onclick="App.navigate('exams')">
       <span class="nav-icon">📝</span><span class="nav-label">Imtihon</span>
+    </button>
+    <button class="nav-item" data-page="goals" onclick="App.navigate('goals')">
+      <span class="nav-icon">🎯</span><span class="nav-label">Maqsadlar</span>
     </button>
     <button class="nav-item" data-page="stats" onclick="App.navigate('stats')">
       <span class="nav-icon">📊</span><span class="nav-label">Statistika</span>
@@ -545,6 +571,52 @@
       </label>
       <hr style="margin:16px 0;border-color:var(--border)">
       <button class="btn btn-outline btn-full" onclick="App.copySchedule()">📋 Jadvalni nusxalash</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== GOAL MODAL ===== -->
+<div class="modal-overlay" id="modal-goal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Maqsad qo'shish</h3>
+      <button class="close-btn" onclick="App.closeModal('goal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Maqsad nomi *</label>
+        <input type="text" id="goalTitle" class="form-input" placeholder="Masalan: 20 ta pomodoro qilish" required />
+      </div>
+      <div class="form-group">
+        <label>Tur</label>
+        <select id="goalType" class="form-select" onchange="App.onGoalTypeChange()">
+          <option value="weekly">📅 Haftalik</option>
+          <option value="monthly">🗓️ Oylik</option>
+          <option value="custom">📌 Maxsus muddat</option>
+        </select>
+      </div>
+      <div class="form-group" id="goalDeadlineGroup" style="display:none">
+        <label>Muddat</label>
+        <input type="date" id="goalDeadline" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label>O'lchov turi</label>
+        <select id="goalMetric" class="form-select">
+          <option value="pomodoro">🍅 Pomodoro sessiyalari</option>
+          <option value="tasks">✅ Bajarilgan vazifalar</option>
+          <option value="hours">⏰ O'qish soatlari</option>
+          <option value="manual">📝 Qo'lda kuzatish</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Maqsad qiymati *</label>
+        <input type="number" id="goalTarget" class="form-input" min="1" max="999" value="10" required />
+      </div>
+      <div class="form-group">
+        <label>Tavsif</label>
+        <textarea id="goalDesc" class="form-textarea" rows="2" placeholder="Nima uchun bu maqsad muhim?"></textarea>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="App.saveGoal()">Saqlash</button>
     </div>
   </div>
 </div>
