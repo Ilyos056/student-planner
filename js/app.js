@@ -92,6 +92,7 @@ const App = {
   init() {
     this.loadData();
     this.applyTheme();
+    this.applyLanguage();
     this.updateHeader();
     this.startClock();
     this.renderToday();
@@ -207,6 +208,33 @@ const App = {
     this.save();
     this.applyTheme();
     if (this.charts.weekly) this.refreshCharts();
+  },
+
+  // ------------------------------------------
+  // LANGUAGE
+  // ------------------------------------------
+  applyLanguage() {
+    if (!this.data.settings.language) this.data.settings.language = 'uz';
+    document.documentElement.setAttribute('lang', this.data.settings.language);
+    if (typeof applyTranslations === 'function') applyTranslations();
+    // Update active language button
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    const active = document.querySelector(`.lang-btn[data-lang="${this.data.settings.language}"]`);
+    if (active) active.classList.add('active');
+  },
+
+  setLanguage(lang) {
+    this.data.settings.language = lang;
+    this.save();
+    this.applyLanguage();
+    // Re-render current page to update dynamic content
+    this.renderToday();
+    this.renderTomorrow();
+    if (this.currentPage !== 'today' && this.currentPage !== 'tomorrow') {
+      this.navigate(this.currentPage);
+    }
+    const names = { uz: 'O\'zbek', en: 'English', ru: 'Русский' };
+    this.toast(`🌐 ${names[lang]} ✓`);
   },
 
   // ------------------------------------------
